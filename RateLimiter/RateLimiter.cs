@@ -17,7 +17,6 @@ namespace RateLimiter
         //A function forwarded from the user to create a list of limit rules for each requester
         private readonly ConcurrentDictionary<string, List<DateTime>> _requestLogs = new();
         private readonly List<RateLimitRule> _rateLimits;
-        //private readonly Func<string> _getUserId;
 
         /// <summary>
         /// Creates an Instance of RateLimiter 
@@ -26,7 +25,6 @@ namespace RateLimiter
         public RateLimiter(List<RateLimitRule> rateLimits)
         {
             _rateLimits = rateLimits;
-            //_getUserId = getUserId;
         }
 
         /// <summary>
