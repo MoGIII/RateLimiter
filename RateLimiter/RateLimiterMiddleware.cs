@@ -20,7 +20,7 @@ namespace RateLimiter
 
         public async Task Invoke(HttpContext httpContext)
         {
-            if (!_rateLimiter.IsLimitReached())
+            if (!_rateLimiter.IsLimitReached(httpContext))
             {
                 httpContext.Response.StatusCode = 429;
                 await httpContext.Response.WriteAsync("Rate limit was exceeded. Please try again later.");

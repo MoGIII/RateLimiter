@@ -1,4 +1,5 @@
-﻿using RateLimiter.Models;
+﻿using Microsoft.AspNetCore.Http;
+using RateLimiter.Models;
 using System.Collections.Concurrent;
 
 namespace RateLimiter
@@ -16,26 +17,26 @@ namespace RateLimiter
         //A function forwarded from the user to create a list of limit rules for each requester
         private readonly ConcurrentDictionary<string, List<DateTime>> _requestLogs = new();
         private readonly List<RateLimitRule> _rateLimits;
-        private readonly Func<string> _getUserId;
+        //private readonly Func<string> _getUserId;
 
         /// <summary>
         /// Creates an Instance of RateLimiter 
         /// </summary>
         
-        public RateLimiter(List<RateLimitRule> rateLimits, Func<string> getUserId)
+        public RateLimiter(List<RateLimitRule> rateLimits)
         {
             _rateLimits = rateLimits;
-            _getUserId = getUserId;
+            //_getUserId = getUserId;
         }
 
         /// <summary>
         /// Method to check if the rate limit was reached in any of the request queues.
         /// </summary>
         /// <returns>true if limit was reached, else false</returns>
-        public bool IsLimitReached()
+        public bool IsLimitReached(HttpContext context)
         {
             //Extract rule by requester
-            string userId = _getUserId();
+            string userId = JwtUtils.GetUserFromToken(context);
 
             if (string.IsNullOrEmpty(userId))
             {
