@@ -10,99 +10,64 @@ namespace RateLimiter
     /// This approach won't block the user completly until the fixed time has passed
     /// and will allow smoother spread of the requests over time. 
     /// </summary>
-    /// <typeparam name="TArg">Type of argument the passed method recieves</typeparam>
-    public class RateLimiter<TArg>
+    
+    public class RateLimiter
     {
         //A function forwarded from the user to create a list of limit rules for each requester
-        private readonly Func<string, RateLimitRule> _limits;
+        private readonly ConcurrentDictionary<string, List<DateTime>> _requestLogs = new();
+        private readonly List<RateLimitRule> _rateLimits;
+        private readonly Func<string> _getUserId;
 
-        //A static dictionary that can be accessed concurrently for storing each requester and his queues of requests
-        private static readonly ConcurrentDictionary<string, List<Queue<DateTime>>> _requests = new();
-
-        //The task we want to perform is the rate limit is not reached
-        private readonly Func<TArg,Task> _func;
-        
         /// <summary>
         /// Creates an Instance of RateLimiter 
         /// </summary>
-        /// <param name="func">The action we want to perform</param>
-        /// <param name="limits">A list of rate limits per requester</param>
-        public RateLimiter(Func<TArg,Task> func, Func<string, RateLimitRule> limits)
+        
+        public RateLimiter(List<RateLimitRule> rateLimits, Func<string> getUserId)
         {
-            _func = func;
-            _limits = limits;
+            _rateLimits = rateLimits;
+            _getUserId = getUserId;
         }
 
         /// <summary>
         /// Method to check if the rate limit was reached in any of the request queues.
         /// </summary>
-        /// <param name="id">the requester</param>
-        /// <param name="waitAmount">The amount of time left for the earliest request to expiret</param>
         /// <returns>true if limit was reached, else false</returns>
-        public bool IsLimitReached(string id, out TimeSpan waitAmount)
+        public bool IsLimitReached()
         {
             //Extract rule by requester
-            var rule = _limits(id);
-            if (rule == null || rule.RateLimits.Count == 0)
+            string userId = _getUserId();
+
+            if (string.IsNullOrEmpty(userId))
             {
-                waitAmount = TimeSpan.Zero;
                 return false;
             }
 
             DateTime now = DateTime.UtcNow;
 
-            //Check if the requester exists in the requests dictionary. If not - add him, else - return the requester queues list
-            var queueList = _requests.GetOrAdd(id, _ => rule.RateLimits.Select(_ => new Queue<DateTime>()).ToList());
-
-            //Lock the queues list for thread saftey
-            lock (queueList)
+            if (!_requestLogs.ContainsKey(userId))
             {
-                waitAmount = TimeSpan.Zero;
+                _requestLogs[userId] = new List<DateTime>();
+                
+            }
+            var timestamps = _requestLogs[userId];
+            // Remove old requests outside of all windows
 
-                for (int i = 0; i < rule.RateLimits.Count; i++)
+            foreach (var item in _rateLimits)
+            {
+                timestamps.RemoveAll(stamp => stamp < now - item.WindowSize);
+            }
+
+            //Check for every rule that the limit was passed
+            foreach (var rule in _rateLimits)
+            {
+                int requestCount = timestamps.Count;
+                if (requestCount >= rule.MaxRequests)
                 {
-                    //extract limit and duration for the specific queue
-                    var (limit, duration) = rule.RateLimits[i];
-                    var queue = queueList[i];
-
-                    //Remove expired timestamps
-                    while (queue.Count > 0 && (now - queue.Peek()) > duration)
-                    {
-                        queue.Dequeue();
-                    }
-
-                    //If limit was exceeded
-                    if (queue.Count >= limit)
-                    {
-                        waitAmount = duration - (now - queue.Peek());
-                        return true;
-                    }
-                }
-
-                //add the current timestamp to every queue
-                foreach (var item in queueList)
-                {
-                    item.Enqueue(now);
+                    return false;
                 }
             }
-            return false;
-        }
-
-        /// <summary>
-        /// Invoke the task if the limit was not reached
-        /// </summary>
-        /// <param name="argument">the parameter that needed to Invoke the method</param>
-        public async Task Perform(TArg argument)
-        {
-            foreach (var item in _requests)
-            {
-                //Check if limit was reached
-                if (!IsLimitReached(item.Key, out TimeSpan waitAmount))
-                {
-                    await Task.Delay(waitAmount);
-                }
-                await _func(argument);
-            }
+            timestamps.Add(now);
+            return true;
         }
     }
 }

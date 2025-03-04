@@ -13,17 +13,17 @@ namespace RateLimiter.Models
     /// </summary>
     public class RateLimitRule
     {
-        public string Requester { get;} 
-        public List<(int Limit, TimeSpan duration)> RateLimits { get; }
+        public TimeSpan WindowSize { get; set; } 
+        public int MaxRequests { get; set; } // 
         /// <summary>
         /// Creates an instance of a RateLimitRule
         /// </summary>
-        /// <param name="user">The requester</param>
-        /// <param name="rateLimits">List of limit amount and duration pairs</param>
-        public RateLimitRule(string user, List<(int, TimeSpan)> rateLimits)
+        /// <param name="windowSize">Moving window size</param>
+        /// <param name="maxRequests">Max requests allowed in the window</param>
+        public RateLimitRule(TimeSpan windowSize, int maxRequests)
         {
-            Requester = user;
-            RateLimits = rateLimits;
+            WindowSize = windowSize;
+            MaxRequests = maxRequests;
         }
     }
 }
